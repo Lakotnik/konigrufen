@@ -52,6 +52,7 @@ class Player:
         self.knowledge = knowledge
         self.alone = False
         self.opponents = []
+        self.reason = None
 
     def contains(self, request):
         for card in self.hand:
@@ -73,11 +74,12 @@ class Player:
             if self.played_card.suit == 'trump':
                 game_state.nrTrumps -= 1
 
-    def determineCard(self, leading_suit,game_state):
+    def determineCard(self, leading_suit,game_state, winning_player):
         game_state.noSuitPlayer = None
         game_state.leading_suit = leading_suit
         nrcards = len(self.hand) - 1  # get number of cards
-        if leading_suit != None: #If not the first player
+
+        if self != winning_player: #If not the first player
             return_card = None
             return_trump = None
             suit_match = False
@@ -91,24 +93,35 @@ class Player:
                     return_trump = card
 
             if suit_match: #play suit if you posess leading suit
+                self.reason = "I will follow the suit"
                 return return_card
             elif trump_match: #play trump if you don't have leading suit
+                self.reason = "I don't have the suit so I play trump"
                 updateNoSuit(self, game_state, leading_suit)
                 return return_trump
             else:
+                self.reason = "I don't have the suit nor trump so I play a random card"
                 updateNoSuit(self,game_state,leading_suit)
+                return self.hand[random.randint(0, nrcards)]  # play random card in all other cases
         elif game_state.useKnowledge: #If we want the agents to use knowledge
             if self.knowledge.hasHighestCard: #If you know you have the highest card, play it.
+                self.reason = "I know I have the highest card so I play it"
                 return getHighestCard(self)
             elif self.knowledge.trumpAdvantage: #If you know you have the majority of trumps, play trumps
+                self.reason = "I know I have the majority of trump cards so I play one"
                 for trump in self.hand:
                     if trump.suit == 'trump':
                         return trump
             elif self.knowledge.opponentLacksSuit:
+                string = ""
+                for suit in self.knowledge.lackedSuits:
+                    string = string + " " + suit
+                self.reason = "I know some of my opponents don't have"+string+" so I play such suits"
                 for lackSuit in self.knowledge.lackedSuits:
                     for card in self.hand:
                         if card.suit == lackSuit:
                             return card
+        self.reason = "I don't have usable knowledge now, so I play a random card"
         return self.hand[random.randint(0, nrcards)] #play random card in all other cases
 
 
@@ -355,7 +368,7 @@ def checkIfLastPlay(players):
             return False
     return True
 def executePlay(player, winning_player, played_card_counter, leading_suit, players, endOfRound, game_state):
-    card_to_be_played = player.determineCard(leading_suit,game_state) #pick random card
+    card_to_be_played = player.determineCard(leading_suit,game_state,winning_player) #pick random card
     game_state.recentCard = card_to_be_played
     if player == winning_player:  # Reset winning player variable and set leading suit
         leading_suit = card_to_be_played.suit
@@ -371,6 +384,7 @@ def executePlay(player, winning_player, played_card_counter, leading_suit, playe
         winning_player = determineWinner(players, leading_suit, game_state)
         played_card_counter = 0
         endOfRound = True
+
         if not winning_player.hand:  # if the last card is played, determine winning team
             determineWinningTeam(players,game_state)
     return winning_player, played_card_counter, leading_suit, endOfRound, game_state
